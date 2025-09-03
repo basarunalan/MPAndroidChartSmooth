@@ -78,13 +78,10 @@ public class RadarChartRenderer extends LineRadarRenderer {
      * @param mostEntries the entry count of the dataset with the most entries
      */
     protected void drawDataSet(Canvas c, IRadarDataSet dataSet, int mostEntries) {
-
         float phaseX = mAnimator.getPhaseX();
         float phaseY = mAnimator.getPhaseY();
-
         float sliceangle = mChart.getSliceAngle();
         float factor = mChart.getFactor();
-
         MPPointF center = mChart.getCenterOffsets();
         MPPointF pOut = MPPointF.getInstance(0,0);
 
@@ -95,32 +92,27 @@ public class RadarChartRenderer extends LineRadarRenderer {
         boolean hasPrev = false;
 
         for (int j = 0; j < dataSet.getEntryCount(); j++) {
-
             RadarEntry e = dataSet.getEntryForIndex(j);
             Utils.getPosition(center,
                     (e.getY() - mChart.getYChartMin()) * factor * phaseY,
                     sliceangle * j * phaseX + mChart.getRotationAngle(), pOut);
 
-            if (Float.isNaN(pOut.x)) continue;
+            if (Float.isNaN(pOut.x))
+                continue;
 
             if (!hasPrev) {
                 surface.moveTo(pOut.x, pOut.y);
                 hasPrev = true;
             } else {
-                // Only smooth if it's a corner (example: every 3rd point)
-                if (j % 3 == 0) {
-                    float cx = (prevX + pOut.x) / 2;
-                    float cy = (prevY + pOut.y) / 2;
-                    surface.quadTo(prevX, prevY, cx, cy);
-                } else {
-                    surface.lineTo(pOut.x, pOut.y);
-                }
+                // Köşeleri yumuşatmak için küçük bir kontrol
+                float cx = (prevX + pOut.x) / 2;
+                float cy = (prevY + pOut.y) / 2;
+                surface.quadTo(prevX, prevY, cx, cy); // sadece köşe
             }
 
             prevX = pOut.x;
             prevY = pOut.y;
         }
-
 
         // close path
         surface.close();
@@ -243,33 +235,35 @@ public class RadarChartRenderer extends LineRadarRenderer {
         float rotationangle = mChart.getRotationAngle();
         MPPointF center = mChart.getCenterOffsets();
 
-        final int xIncrements = 1 + mChart.getSkipWebLineCount();
         int maxEntryCount = mChart.getData().getMaxEntryCountSet().getEntryCount();
+        int xIncrements = 1 + mChart.getSkipWebLineCount();
 
-        // --- dış web (merkezden çıkan çizgiler) ---
+        // Dış web (merkezden çıkan çizgiler)
         mWebPaint.setStrokeWidth(mChart.getWebLineWidth());
         mWebPaint.setColor(mChart.getWebColor());
         mWebPaint.setAlpha(mChart.getWebAlpha());
 
-        MPPointF p = MPPointF.getInstance(0,0);
+        MPPointF p = MPPointF.getInstance(0, 0);
         for (int i = 0; i < maxEntryCount; i += xIncrements) {
             Utils.getPosition(center,
                     mChart.getYRange() * factor,
                     sliceangle * i + rotationangle,
                     p);
 
-            // köşeleri yumuşak çizmek için Path kullanalım
+            // Küçük köşe yuvarlatma: center -> biraz iç nokta -> uç
+            float offsetX = (center.x + p.x) / 1.9f; // 1.9 ile hafif yuvarlat
+            float offsetY = (center.y + p.y) / 1.9f;
+
             Path linePath = new Path();
             linePath.moveTo(center.x, center.y);
-            float cx = (center.x + p.x) / 2f;
-            float cy = (center.y + p.y) / 2f;
-            linePath.quadTo(center.x, center.y, cx, cy);
+            linePath.quadTo(center.x, center.y, offsetX, offsetY);
             linePath.lineTo(p.x, p.y);
+
             c.drawPath(linePath, mWebPaint);
         }
         MPPointF.recycleInstance(p);
 
-        // --- iç web (çemberler) ---
+        // İç web (çemberler) - sadece köşeleri hafif yuvarlat
         mWebPaint.setStrokeWidth(mChart.getWebLineWidthInner());
         mWebPaint.setColor(mChart.getWebColorInner());
         mWebPaint.setAlpha(mChart.getWebAlpha());
@@ -286,11 +280,11 @@ public class RadarChartRenderer extends LineRadarRenderer {
                 Utils.getPosition(center, r, sliceangle * i + rotationangle, p1out);
                 Utils.getPosition(center, r, sliceangle * (i + 1) + rotationangle, p2out);
 
-                // Path ile köşeleri yumuşat
-                float cx = (p1out.x + p2out.x) / 2f;
-                float cy = (p1out.y + p2out.y) / 2f;
+                float offsetX = (p1out.x + p2out.x) / 1.9f;
+                float offsetY = (p1out.y + p2out.y) / 1.9f;
+
                 if (i == 0) webRing.moveTo(p1out.x, p1out.y);
-                webRing.quadTo(p1out.x, p1out.y, cx, cy);
+                webRing.quadTo(p1out.x, p1out.y, offsetX, offsetY);
             }
 
             webRing.close();
