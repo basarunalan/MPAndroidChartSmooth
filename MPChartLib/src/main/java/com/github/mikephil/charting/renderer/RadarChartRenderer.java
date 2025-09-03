@@ -83,21 +83,18 @@ public class RadarChartRenderer extends LineRadarRenderer {
         float phaseY = mAnimator.getPhaseY();
 
         float sliceangle = mChart.getSliceAngle();
-
-        // calculate the factor that is needed for transforming the value to
-        // pixels
         float factor = mChart.getFactor();
 
         MPPointF center = mChart.getCenterOffsets();
         MPPointF pOut = MPPointF.getInstance(0,0);
+
         Path surface = mDrawDataSetSurfacePathBuffer;
         surface.reset();
 
-        boolean hasMovedToPoint = false;
+        float prevX = 0f, prevY = 0f;
+        boolean hasPrev = false;
 
         for (int j = 0; j < dataSet.getEntryCount(); j++) {
-
-            mRenderPaint.setColor(dataSet.getColor(j));
 
             RadarEntry e = dataSet.getEntryForIndex(j);
 
@@ -109,42 +106,42 @@ public class RadarChartRenderer extends LineRadarRenderer {
             if (Float.isNaN(pOut.x))
                 continue;
 
-            if (!hasMovedToPoint) {
+            if (!hasPrev) {
                 surface.moveTo(pOut.x, pOut.y);
-                hasMovedToPoint = true;
-            } else
-                surface.lineTo(pOut.x, pOut.y);
+                hasPrev = true;
+            } else {
+                float cx = (prevX + pOut.x) / 2;
+                float cy = (prevY + pOut.y) / 2;
+                surface.quadTo(prevX, prevY, cx, cy);
+            }
+
+            prevX = pOut.x;
+            prevY = pOut.y;
         }
 
-        if (dataSet.getEntryCount() > mostEntries) {
-            // if this is not the largest set, draw a line to the center before closing
-            surface.lineTo(center.x, center.y);
-        }
-
+        // close path
         surface.close();
 
+        // draw fill
         if (dataSet.isDrawFilledEnabled()) {
-
             final Drawable drawable = dataSet.getFillDrawable();
             if (drawable != null) {
-
                 drawFilledPath(c, surface, drawable);
             } else {
-
                 drawFilledPath(c, surface, dataSet.getFillColor(), dataSet.getFillAlpha());
             }
         }
 
+        // draw stroke
         mRenderPaint.setStrokeWidth(dataSet.getLineWidth());
         mRenderPaint.setStyle(Paint.Style.STROKE);
-
-        // draw the line (only if filled is disabled or alpha is below 255)
         if (!dataSet.isDrawFilledEnabled() || dataSet.getFillAlpha() < 255)
             c.drawPath(surface, mRenderPaint);
 
         MPPointF.recycleInstance(center);
         MPPointF.recycleInstance(pOut);
     }
+
 
     @Override
     public void drawValues(Canvas c) {
