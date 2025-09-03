@@ -260,8 +260,8 @@ public class RadarChartRenderer extends LineRadarRenderer {
                 linePath.moveTo(center.x, center.y);
             } else {
                 // Küçük köşe rounding
-                float cx = (prev.x + p.x) / 2f;
-                float cy = (prev.y + p.y) / 2f;
+                float cx = (prev.x + p.x) / 2.5f;
+                float cy = (prev.y + p.y) / 2.5f;
                 linePath.quadTo(prev.x, prev.y, cx, cy);
                 linePath.lineTo(p.x, p.y);
             }
