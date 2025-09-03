@@ -77,7 +77,9 @@ public class RadarChartRenderer extends LineRadarRenderer {
      * @param dataSet
      * @param mostEntries the entry count of the dataset with the most entries
      */
+    @Override
     protected void drawDataSet(Canvas c, IRadarDataSet dataSet, int mostEntries) {
+
         float phaseX = mAnimator.getPhaseX();
         float phaseY = mAnimator.getPhaseY();
         float sliceangle = mChart.getSliceAngle();
@@ -93,31 +95,32 @@ public class RadarChartRenderer extends LineRadarRenderer {
 
         for (int j = 0; j < dataSet.getEntryCount(); j++) {
             RadarEntry e = dataSet.getEntryForIndex(j);
+
             Utils.getPosition(center,
                     (e.getY() - mChart.getYChartMin()) * factor * phaseY,
                     sliceangle * j * phaseX + mChart.getRotationAngle(), pOut);
 
-            if (Float.isNaN(pOut.x))
-                continue;
+            if (Float.isNaN(pOut.x)) continue;
 
             if (!hasPrev) {
                 surface.moveTo(pOut.x, pOut.y);
                 hasPrev = true;
             } else {
-                // Köşeleri yumuşatmak için küçük bir kontrol
-                float cx = (prevX + pOut.x) / 2;
-                float cy = (prevY + pOut.y) / 2;
-                surface.quadTo(prevX, prevY, cx, cy); // sadece köşe
+                // Küçük köşe rounding
+                float cx = (prevX + pOut.x) / 2f;
+                float cy = (prevY + pOut.y) / 2f;
+                surface.quadTo(prevX, prevY, cx, cy);
+                surface.lineTo(pOut.x, pOut.y);
             }
 
             prevX = pOut.x;
             prevY = pOut.y;
         }
 
-        // close path
+        // Close polygon
         surface.close();
 
-        // draw fill
+        // Draw fill
         if (dataSet.isDrawFilledEnabled()) {
             final Drawable drawable = dataSet.getFillDrawable();
             if (drawable != null) {
@@ -127,7 +130,7 @@ public class RadarChartRenderer extends LineRadarRenderer {
             }
         }
 
-        // draw stroke
+        // Draw stroke
         mRenderPaint.setStrokeWidth(dataSet.getLineWidth());
         mRenderPaint.setStyle(Paint.Style.STROKE);
         if (!dataSet.isDrawFilledEnabled() || dataSet.getFillAlpha() < 255)
@@ -136,7 +139,6 @@ public class RadarChartRenderer extends LineRadarRenderer {
         MPPointF.recycleInstance(center);
         MPPointF.recycleInstance(pOut);
     }
-
 
     @Override
     public void drawValues(Canvas c) {
@@ -228,42 +230,49 @@ public class RadarChartRenderer extends LineRadarRenderer {
         drawWeb(c);
     }
 
+    @Override
     protected void drawWeb(Canvas c) {
 
         float sliceangle = mChart.getSliceAngle();
         float factor = mChart.getFactor();
         float rotationangle = mChart.getRotationAngle();
         MPPointF center = mChart.getCenterOffsets();
-
         int maxEntryCount = mChart.getData().getMaxEntryCountSet().getEntryCount();
         int xIncrements = 1 + mChart.getSkipWebLineCount();
 
-        // Dış web (merkezden çıkan çizgiler)
+        MPPointF prev = MPPointF.getInstance(0,0);
+        MPPointF p = MPPointF.getInstance(0,0);
+
+        // --- dış web (merkezden çıkan çizgiler) ---
         mWebPaint.setStrokeWidth(mChart.getWebLineWidth());
         mWebPaint.setColor(mChart.getWebColor());
         mWebPaint.setAlpha(mChart.getWebAlpha());
 
-        MPPointF p = MPPointF.getInstance(0, 0);
         for (int i = 0; i < maxEntryCount; i += xIncrements) {
+
             Utils.getPosition(center,
                     mChart.getYRange() * factor,
                     sliceangle * i + rotationangle,
                     p);
 
-            // Küçük köşe yuvarlatma: center -> biraz iç nokta -> uç
-            float offsetX = (center.x + p.x) / 1.9f; // 1.9 ile hafif yuvarlat
-            float offsetY = (center.y + p.y) / 1.9f;
-
             Path linePath = new Path();
-            linePath.moveTo(center.x, center.y);
-            linePath.quadTo(center.x, center.y, offsetX, offsetY);
+            if (i == 0) {
+                linePath.moveTo(center.x, center.y);
+            } else {
+                // Küçük köşe rounding
+                float cx = (prev.x + p.x) / 2f;
+                float cy = (prev.y + p.y) / 2f;
+                linePath.quadTo(prev.x, prev.y, cx, cy);
+                linePath.lineTo(p.x, p.y);
+            }
+            linePath.moveTo(center.x, center.y); // Merkezden çizgi
             linePath.lineTo(p.x, p.y);
-
             c.drawPath(linePath, mWebPaint);
-        }
-        MPPointF.recycleInstance(p);
 
-        // İç web (çemberler) - sadece köşeleri hafif yuvarlat
+            prev.set(p.x, p.y);
+        }
+
+        // --- iç web (çemberler / katmanlar) ---
         mWebPaint.setStrokeWidth(mChart.getWebLineWidthInner());
         mWebPaint.setColor(mChart.getWebColorInner());
         mWebPaint.setAlpha(mChart.getWebAlpha());
@@ -280,21 +289,25 @@ public class RadarChartRenderer extends LineRadarRenderer {
                 Utils.getPosition(center, r, sliceangle * i + rotationangle, p1out);
                 Utils.getPosition(center, r, sliceangle * (i + 1) + rotationangle, p2out);
 
-                float offsetX = (p1out.x + p2out.x) / 1.9f;
-                float offsetY = (p1out.y + p2out.y) / 1.9f;
+                // Küçük köşe rounding
+                float cx = (p1out.x + p2out.x) / 2f;
+                float cy = (p1out.y + p2out.y) / 2f;
 
                 if (i == 0) webRing.moveTo(p1out.x, p1out.y);
-                webRing.quadTo(p1out.x, p1out.y, offsetX, offsetY);
+                webRing.quadTo(p1out.x, p1out.y, cx, cy);
+                webRing.lineTo(p2out.x, p2out.y);
             }
 
             webRing.close();
             c.drawPath(webRing, mWebPaint);
         }
 
+        MPPointF.recycleInstance(center);
+        MPPointF.recycleInstance(prev);
+        MPPointF.recycleInstance(p);
         MPPointF.recycleInstance(p1out);
         MPPointF.recycleInstance(p2out);
     }
-
 
     @Override
     public void drawHighlighted(Canvas c, Highlight[] indices) {
