@@ -97,27 +97,30 @@ public class RadarChartRenderer extends LineRadarRenderer {
         for (int j = 0; j < dataSet.getEntryCount(); j++) {
 
             RadarEntry e = dataSet.getEntryForIndex(j);
-
-            Utils.getPosition(
-                    center,
+            Utils.getPosition(center,
                     (e.getY() - mChart.getYChartMin()) * factor * phaseY,
                     sliceangle * j * phaseX + mChart.getRotationAngle(), pOut);
 
-            if (Float.isNaN(pOut.x))
-                continue;
+            if (Float.isNaN(pOut.x)) continue;
 
             if (!hasPrev) {
                 surface.moveTo(pOut.x, pOut.y);
                 hasPrev = true;
             } else {
-                float cx = (prevX + pOut.x) / 2;
-                float cy = (prevY + pOut.y) / 2;
-                surface.quadTo(prevX, prevY, cx, cy);
+                // Only smooth if it's a corner (example: every 3rd point)
+                if (j % 3 == 0) {
+                    float cx = (prevX + pOut.x) / 2;
+                    float cy = (prevY + pOut.y) / 2;
+                    surface.quadTo(prevX, prevY, cx, cy);
+                } else {
+                    surface.lineTo(pOut.x, pOut.y);
+                }
             }
 
             prevX = pOut.x;
             prevY = pOut.y;
         }
+
 
         // close path
         surface.close();
@@ -236,61 +239,68 @@ public class RadarChartRenderer extends LineRadarRenderer {
     protected void drawWeb(Canvas c) {
 
         float sliceangle = mChart.getSliceAngle();
-
-        // calculate the factor that is needed for transforming the value to
-        // pixels
         float factor = mChart.getFactor();
         float rotationangle = mChart.getRotationAngle();
-
         MPPointF center = mChart.getCenterOffsets();
-
-        // draw the web lines that come from the center
-        mWebPaint.setStrokeWidth(mChart.getWebLineWidth());
-        mWebPaint.setColor(mChart.getWebColor());
-        mWebPaint.setAlpha(mChart.getWebAlpha());
 
         final int xIncrements = 1 + mChart.getSkipWebLineCount();
         int maxEntryCount = mChart.getData().getMaxEntryCountSet().getEntryCount();
 
+        // --- dış web (merkezden çıkan çizgiler) ---
+        mWebPaint.setStrokeWidth(mChart.getWebLineWidth());
+        mWebPaint.setColor(mChart.getWebColor());
+        mWebPaint.setAlpha(mChart.getWebAlpha());
+
         MPPointF p = MPPointF.getInstance(0,0);
         for (int i = 0; i < maxEntryCount; i += xIncrements) {
-
-            Utils.getPosition(
-                    center,
+            Utils.getPosition(center,
                     mChart.getYRange() * factor,
                     sliceangle * i + rotationangle,
                     p);
 
-            c.drawLine(center.x, center.y, p.x, p.y, mWebPaint);
+            // köşeleri yumuşak çizmek için Path kullanalım
+            Path linePath = new Path();
+            linePath.moveTo(center.x, center.y);
+            float cx = (center.x + p.x) / 2f;
+            float cy = (center.y + p.y) / 2f;
+            linePath.quadTo(center.x, center.y, cx, cy);
+            linePath.lineTo(p.x, p.y);
+            c.drawPath(linePath, mWebPaint);
         }
         MPPointF.recycleInstance(p);
 
-        // draw the inner-web
+        // --- iç web (çemberler) ---
         mWebPaint.setStrokeWidth(mChart.getWebLineWidthInner());
         mWebPaint.setColor(mChart.getWebColorInner());
         mWebPaint.setAlpha(mChart.getWebAlpha());
 
         int labelCount = mChart.getYAxis().mEntryCount;
-
         MPPointF p1out = MPPointF.getInstance(0,0);
         MPPointF p2out = MPPointF.getInstance(0,0);
+
         for (int j = 0; j < labelCount; j++) {
+            Path webRing = new Path();
 
-            for (int i = 0; i < mChart.getData().getEntryCount(); i++) {
-
+            for (int i = 0; i < maxEntryCount; i++) {
                 float r = (mChart.getYAxis().mEntries[j] - mChart.getYChartMin()) * factor;
-
                 Utils.getPosition(center, r, sliceangle * i + rotationangle, p1out);
                 Utils.getPosition(center, r, sliceangle * (i + 1) + rotationangle, p2out);
 
-                c.drawLine(p1out.x, p1out.y, p2out.x, p2out.y, mWebPaint);
-
-
+                // Path ile köşeleri yumuşat
+                float cx = (p1out.x + p2out.x) / 2f;
+                float cy = (p1out.y + p2out.y) / 2f;
+                if (i == 0) webRing.moveTo(p1out.x, p1out.y);
+                webRing.quadTo(p1out.x, p1out.y, cx, cy);
             }
+
+            webRing.close();
+            c.drawPath(webRing, mWebPaint);
         }
+
         MPPointF.recycleInstance(p1out);
         MPPointF.recycleInstance(p2out);
     }
+
 
     @Override
     public void drawHighlighted(Canvas c, Highlight[] indices) {
